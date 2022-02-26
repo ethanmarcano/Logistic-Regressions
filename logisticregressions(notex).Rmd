@@ -1,0 +1,436 @@
+---
+title: "Logistic Regression Exercises"
+author: "Ethan Marcano"
+date: "2/25/2022"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+geometry: margin=0.5in
+header-includes:
+- \usepackage{setspace}
+- \doublespacing
+- \usepackage{caption}
+- \captionsetup{width=.75\textwidth}
+- \usepackage{geometry}
+- \usepackage{listings}
+- \usepackage{dcolumn}
+- \lstset{breaklines=true}
+---
+
+```{r setup, include=FALSE}
+library(formatR)
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=60), tidy=TRUE, echo = TRUE)
+library(tidyverse)
+library(broom)
+library(caTools)
+library(caret)
+library(ROCR)
+library(corrplot)
+options(knitr.table.format = "latex")
+```
+
+## Exercise 1: Predicting the Baseball World Series Champion
+***
+
+### A) Exploring the dataset
+
+```{r baseballdata, echo=FALSE, warning=FALSE}
+  baseball <- read.csv("Baseball.csv")
+  dfbaseball <- as_tibble(baseball)
+```
+#### i) Each row of the dataset represent's a playoff's team's performance in a particular year. Through the years, different numbers of teams have been invited to the playoffs. How has the number of teams making it to the playoffs changed, according to this dataset?
+
+```{r cleanball}
+head(baseball)
+tail(baseball)
+```
+
+```{r summary}
+summary(baseball)
+```
+
+```{r filtered}
+filterball <- baseball %>%
+  select(Team, Year, RankSeason, NumCompetitors, WonWorldSeries) %>%
+  filter(WonWorldSeries == 1)
+
+head(filterball)
+```
+  + The number of competitors has increased from two teams at the beginning to 10 teams in the present day.
+  + Teams invited to the playoffs are somewhat lower in the regular season because of the the number of competitors invited.
+
+#### ii) Given that a team has made it to the playoffs, it is much harder to win the World Series if there are 10 teams competing for the championship versus just two. Therefore we have the variable **NumCompetitors** in our dataset. **NumCompetitors** contains the number of total teams making the playoffs in the year of the observation. For instance, **NumCompetitors** is 2 for the 1962 New York Yankees, but it is 8 for the 1998 Boston Red Sox. Without knowing anything else about the teams in the playoffs, can you think of a simple model that uses **NumCompetitors** to predict the probability of a team winning?
+  + A linear regression model using NumCompetitors shows that it is statistically significant in determining the probability of a team winning.
+
+```{r simplemodel}
+
+simplemodel <- lm(WonWorldSeries ~ NumCompetitors, data = dfbaseball)
+
+```
+
+\newpage
+### B) Building a logistic regression model to predict the winner
+
+#### i) When we are not sure which of our variables are useful in predicting a particular outcome, it is often helpful to build bivariate models, which are models that predict the outcome using a single independent variable. Build a bivariate logistic regression model using each of the following variables as the independent variable to predict **WonWorldSeries** and the entire dataset as the training set each time: **Year, RS, RA, W, OBP, SLG, BA, RankSeason, NumCompetitors,** and **League**. You should have created 10 logistic regression models. Describe each of the models by giving the regression equation and the accuracy of the model. For which models is the independent variable significant? In your opinion, which are the best models and why?
+
+```{r bivariatelogit, include=FALSE}
+logisticyear <- glm(WonWorldSeries ~ Year, family = binomial, data = dfbaseball)
+logisticRS <- glm(WonWorldSeries ~ RS, family = binomial, data = dfbaseball)
+logisticRA <- glm(WonWorldSeries ~ RA, family = binomial, data = dfbaseball)
+logisticW <- glm(WonWorldSeries ~ W, family = binomial, data = dfbaseball)
+logisticOBP <- glm(WonWorldSeries ~ OBP, family = binomial, data = dfbaseball)
+logisticSLG <- glm(WonWorldSeries ~ SLG, family = binomial, data = dfbaseball)
+logisticBA <- glm(WonWorldSeries ~ BA, family = binomial, data = dfbaseball)
+logisticrank <- glm(WonWorldSeries ~ RankSeason, family = binomial, data = dfbaseball)
+logisticcomp <- glm(WonWorldSeries ~ NumCompetitors, family = binomial, data = dfbaseball)
+logisticleague <- glm(WonWorldSeries ~ League, family = binomial, data = dfbaseball)
+```
+
+```{r logisticsum, include=FALSE}
+summary(logisticyear)
+summary(logisticRS)
+summary(logisticRA)
+summary(logisticW)
+summary(logisticOBP)
+summary(logisticSLG)
+summary(logisticBA)
+summary(logisticrank)
+summary(logisticcomp)
+summary(logisticleague)
+```
++ $$log(Odds) = 72.236 +-0.037(Year)$$
++ $$log(Odds) = 0.66 + -0.0026(RS)$$
++ $$log(Odds) = 1.88 + -0.005(RA)$$ 
++ $$log(Odds) = -6.856 + -0.0567(W)$$
++ $$log(Odds) = 2.741 + -12.4(OBP)$$
++ $$log(Odds) = 3.2 + -11.13(SLG)$$
++ $$log(Odds) = -0.64 + -2.98(BA)$$
++ $$log(Odds) = -0.825 + -0.2(RankSeason)$$
++ $$log(Odds) = .0387 +-.252(NumCompetitors)$$
++ $$log(Odds) = -1.35 +-.1583(LeagueNL)$$
+
+
++ The year, number of competitors, RankSeason, and RA are all significant in their individual models.
+
+
+#### ii) Now, build a logistic model using all of the variables that you found to be significant in the bivariate models as the independent variables, and the entire dataset to train the model. Are all of the independent variables significant in this model? Why would some independent variables be significant in the bivariate model using that variable, but then not significant in a model that uses more than one independent variables? Be sure to provide numerical evidence for your claim. 
++ As none of the p-values are significant, none of the independent variables that were originally found to be significant are significant in the multivariate model. This may be due to colinearity.
+
+```{r multimodel}
+multimodel <- glm(WonWorldSeries ~ NumCompetitors + Year + RA + RankSeason, family='binomial', data = dfbaseball)
+summary(multimodel)
+```
+
+#### iii) Using any number of the independent variables that you found to be significant in the bivariate models, find what you think is the best model, and justify why you think it is the best. How many independent variables are used in your final model?
+```{r bestmodel}
+bestmodel <- glm(WonWorldSeries ~ NumCompetitors + Year, family = 'binomial', data = dfbaseball)
+summary(bestmodel)
+```
++ I used the independent variables with the most significance on their own (NumCompetitors and Year) to see if it is the best model. It has a lower AIC than the other multivariate model, and while the p-values are still high, are lower than the other model.
+
+#### iv) Do your findings in this problem confirm or reject the claim that the playoffs is more about luck than skill? Why?
+  + Yes, it confirms that the claim. The most significant variable, NumCompetitors, has no bearing on a team's skill.
+  
+\newpage  
+## Exercise 2: Predicting Parole Violators
+***
+```{r loadparole}
+parole <- read.csv("Parole.csv")
+dfparole <- as_tibble(parole)
+```
+
+```{r parolesummary}
+summary(dfparole)
+```
+### A) How many parolees do we have data for? Of the parolees that we have data for, what percentage violated the terms of their parole?
+```{r parolecount}
+count(dfparole)
+
+violators <- dfparole %>%
+    select(everything()) %>%
+    filter(Violator == 1)
+
+count(violators)
+  
+```
++ We have 675 parolees. Out of that 675, 78 of them violated parole.
+
+### B) Randomly split the data into a training set and a testing set, putting 70% of the data in the training set. Then, build a logistic regression model to predict the variable Violator using all of the other variables as independent variables. You should use the training dataset to build the model.
+
+```{r dataprep}
+dfparole$State = as.factor(dfparole$State)
+dfparole$Crime = as.factor(dfparole$Crime)
+summary(dfparole$State)
+summary(dfparole$Crime)
+```
+
+```{r setsplit}
+set.seed(88)
+spl = sample.split(dfparole$Violator, SplitRatio = 0.7)
+
+paroletrain = subset(dfparole, spl == TRUE)
+paroletest = subset(dfparole, spl == FALSE)
+
+nrow(paroletrain)/nrow(dfparole)
+nrow(paroletest)/nrow(dfparole)
+```
+
+```{r parolemodel}
+trainmodel <- glm(Violator ~., family = binomial, data = paroletrain)
+```
+
+#### i) Describe your resulting model. Which variables are significant in your model?
+```{r parolemodelsum}
+summary(trainmodel)
+```
++ Some significant variables are State$Virginia and MultipleOffenses.
+
+#### ii) Consider a parolee who is male, of white race, aged 50 years at prison release, from the state of Maryland, served 3 months, had a maximum sentence of 12 months, did not commit multiple offenses, and committed a larceny. According to your model, what is the probability that this individual is a violator?
+
+```{r paroleeprob}
+Male = 1
+RaceWhite = 1
+Age = 50
+StateOther = 1
+StateLouisiana = 0
+StateVirginia = 0
+time.served = 3
+max.sentence = 12
+multiple.offenses = 0
+CrimeDrugs = 0
+CrimeLarceny = 1
+CrimeOther = 0
+
+logodds = -3.29370 + 0.65662*Male + -0.67930*RaceWhite + 0.01739*Age + 0.67688*StateOther + -0.17308*StateLouisiana + -3.38536*StateVirginia + -0.06809*time.served + 0.04536*max.sentence + 1.42426*multiple.offenses + -0.23931*CrimeDrugs + 0.99710*CrimeLarceny + 0.19106*CrimeOther
+
+logodds
+
+odds = exp(logodds)
+odds
+
+1/(1 + exp(-logodds))
+```
++ There is a 39% chance that the Parolee is a violator.
+
+#### iii) Now compute the model's predicted probabilities for parolees in the testing set. Then create a confusion matrix for the test set using a threshold of 0.5. What is the model's false positive rate on the test set? False negative rate? Overall accuracy?
+
+```{r testmatrix}
+predictions = predict(trainmodel, newdata = paroletest, type = "response")
+
+summary(predictions)
+testmatrix <- table(paroletest$Violator, as.numeric(predictions >= 0.5))
+testmatrix
+
+sum(diag(testmatrix))/sum(testmatrix)
+```
++ Maximum probability is 82%. There are 20 False Negatives and 0 False Positives. The overall accuracy for the model is 90.1%
+
+#### iv) Compare your accuracy on the test set to a baseline model that predicts every parolee in the test set is a non-violator, regardless of the values of the independent variables. Does your model improve over this simple model?
+```{r simpletest}
+simpletest <- table(paroletest$Violator)
+simpletest
+
+simpletest[1]/simpletest[2]
+```
++ Our model does improve over the simple model.
+
+#### v) Consider a parole board using the model to predict whether parolees will be violators or not. The job of a parole board is to make sure that a prisoners is ready to be released into free society, and therefore parole boards tend to be particularly concerned about releasing prisoners who will violate their parole. Would the parole board be more concerned by false positive errors or false negative errors? How should they adjust their threshold to reflect their error preferences?
+
+```{r parolecompare}
+highthreshold <- table(paroletest$Violator, as.numeric(predictions >= 0.7))
+
+lowthreshold <- table(paroletest$Violator, as.numeric(predictions >= 0.3))
+
+highthreshold
+lowthreshold
+```
++ The board would be more concerned with a false negative, being that means that a parolee has violated parole and committed another crime. A false positive, wherein a prisoner is denied parole would induce less regret in the parole board. We would want more false positives as opposed to false negatives, and we would adjust the threshold to be lower to reflect that.
+
+#### vi) Compute the AUC of the model on the test set, and interpret what the number means in this context. Considering the AUC, the accuracy compared to the base model, and what happens when the threshold is adjusted, do you think this model is of value to a parole board? Why or why not?
+
+```{r auccompute}
+
+predrocr <- prediction(predictions, paroletest$Violator)
+
+as.numeric(performance(predrocr, "auc")@y.values)
+```
++ AUC = 0.8214719. I think that considering the different measures of accuracy, that the model is still of value to a parole board, especially in a context where it is better to be safe than sorry.
+
+### C) How can we improve our dataset to best address selection bias?
+
++ It would help to include the missing prisoners and labeling them as non-violators since it is technically true. It would be better if we had the true outcome of different parolees, but that may require a larger dataset.
+
+\newpage
+## Exercise 3: Loan Repayment
+***
+
+### A) Building a logistic regression model
+
+#### i) Randomly split the dataset into a training set and a testing set. Put 70% of the data in the training set. What is the accuracy on the test set of a simple baseline model that predicts that all loans will be paid back in full(NotFullyPaid = 0)? Our goal will be to build a model that dds value over this simple baseline method.
+
+```{r dataloans}
+loans <- read.csv("Loans.csv")
+dfloans <- as_tibble(loans)
+
+summary(dfloans)
+
+filterloans <- dfloans %>%
+  select(everything())%>%
+  filter(NotFullyPaid == 0)
+
+count(filterloans)
+```
+
+```{r loansplit}
+set.seed(88)
+spl = sample.split(dfloans$NotFullyPaid, SplitRatio = 0.7)
+
+loanstrain = subset(dfloans, spl == TRUE)
+loanstest = subset(dfloans, spl == FALSE)
+
+nrow(loanstrain)/nrow(dfloans)
+nrow(loanstest)/nrow(dfloans)
+```
+```{r simpleloans}
+simpleloan <- table(loanstest$NotFullyPaid)
+simpleloan
+
+simpleloan[1]/sum(simpleloan)
+```
++ The baseline model is 83.99% accurate.
+
+#### ii) Build a logistic regression model that predicts the dependent variable NotFullyPaid using all of the other variables as independent variables. Use the training set as the data for the model. Describe your resulting model. Which of the independent variables are significant in your model?
+```{r loanmodel}
+loanmodel = glm(NotFullyPaid ~ ., data=loanstrain, family = "binomial")
+
+summary(loanmodel)
+```
++ A surprising amount of independent variables are strongly significant. The significant independent variables are Purposecredit_card, Purposedebt_consolidation, Purposesmall_business, Installment, LogAnnualInc, Fico, RevolBal, and InqLast6mths.
+
+#### iii) Consider two loan applications, which are identical other than the fact that the borrower in App. A has a FICO score of 700 while the borrow in App. B has a FICO score of 710. Let Logit(A) be the function of loan A not being paid back in full (according to our model) and define Logit(B) similarly. What is the value of Logit(A) - Logit(B)?
+
+```{r ficocompare}
+#fico coefficient is -9.211e-03 and the score difference is 10
+
+logoddiff = -9.211e-03 * -10
+logoddiff
+```
++ Since the two applications are the same except for the difference in FICO score, the predicted logodds of A differ by .09211 from B.
+
+#### iv) Now predict the probability of the test set loans not being paid back in full. Store these predicted probabilities in a variable named PredictedRisk and add it to your test set. What is the accuracy of the logisitic regression model on the test set using a threshold of 0.5? How does this compare to baseline?
+```{r testprob}
+loanstest$PredictedRisk <- predict(loanmodel, newdata=loanstest, type="response")
+
+loanmatrix = table(loanstest$NotFullyPaid, loanstest$PredictedRisk > 0.5)
+
+loanmatrix
+
+sum(diag(loanmatrix))/sum(loanmatrix)
+```
++ The accuracy of the logistic regression model is slightly worse, if not the same as the baseline model.
+
+#### v) What is the test set AUC of the model? Given the accuracy and the AUC, would this model be useful to an investor?
+
+```{r}
+pred = prediction(loanstest$PredictedRisk, loanstest$NotFullyPaid)
+as.numeric(performance(pred, "auc")@y.values)
+```
++ The AUC is 0.6674. This model is only somewhat better than a coinflip, so it is unlikely to be useful to an investor.
+
+### B) Using the loan's interest rate as a "smart baseline" to order the loans according to risk.
+
+#### i) Build a logistic regression model that predicts the dependent variable NotFullyPaid using IntRate as the only independent variable. Was it significant in the first model you built? How would you explain the difference?
+
+```{r intmodel}
+interestmodel <- glm(NotFullyPaid ~ IntRate, data = loanstrain, family = binomial)
+
+summary(interestmodel)
+```
++ IntRate is very significant in this model. It did not have significance in the original model. I would explain the difference via correlation.
+
+```{r correlation}
+dfloans$Purpose = as.numeric(dfloans$Purpose)
+summary(dfloans$Purpose)
+cor(dfloans)
+```
+
+#### ii) Use the new model to make predictions for the observations in the test set. What is the highest predicted probability of a loan being paid in full? How many loans would we predict would not be paid back in full if we used a threshold of 0.5 to make predictions?
+```{r newmodel}
+interestpred = predict(interestmodel, newdata = loanstest, type = "response")
+
+summary(interestpred)
+```
++ The highest probability is 0.4564. If we used a 0.5 threshold, it would mean that no loans would be predicted as failing.
+
+#### iii) Compute the test set AUC of the model. How does this compare to the first model? Which is stronger and why?
+
+```{r newauc}
+interestpred = prediction(interestpred, loanstest$NotFullyPaid)
+
+as.numeric(performance(interestpred, "auc")@y.values)
+```
++ The AUC for this model is 0.619. This is worse than the model with many independent variables. We would assume that the model with all of the independent variables is stronger, but this one does fairly well with only one predictor.
+
+## C) Using the model to compute profitability
+
+#### i)If the loan is paid back in full, then the investor makes interest on the loan. If the loan is not paid back, the investor loses money. The investor needs to balance risk and reward. To compute interest consider a $c investment in a loan that has an annual interest rate r over a period of t years. Using continuous compounding, the investment pays back c x e^rt^ dollars by the end of t years. How much does a $10 investment with an annual interest rate of 6% pay back after 3 years, using the interest formula?
+
+```{r investment}
+c = 10
+r = 0.06
+t = 3
+
+c*exp(r*t)
+```
+#### ii) What is the profit to the investor if the investment is paid back in full? What if not?
++ It would be c*(exp(rt)) - c. Otherwise, it would just be -c.
+
+#### iii) Compute profit of 1 dollar investment and save to profit. It should depend on the value of NotFullyPaid. What is the max profit?
+
+```{r newloans}
+#remember 3 year term
+loanstest$profit = exp(loanstest$IntRate*3) - 1
+loanstest$profit[loanstest$NotFullyPaid == 1] = -1
+
+summary(loanstest$profit)
+
+
+```
++ Max profit is 8.895.
+
+#### iv) A simple investing strategy of investing in all loans would yield a profit 20.94 for 100. This does not leverage the model we built earlier. Instead, analyze an investment strategy in which the investor only purchaes loans with a >=15% interest rate to maximize return, but with the lowest rate of failing. Model an investor who invests $1 in 100 of the best loans. Create a new dataset called HighInterest consisting of testset loans with an interest rate of at least 15%. What is the average profit? What proportion of loans were not paid back?
+
+```{r riskloans}
+highinterest <- subset(loanstest, IntRate>= 0.15)
+mean(highinterest$profit)
+
+riskproportion = table(highinterest$NotFullyPaid)
+
+riskproportion[2]/sum(riskproportion)
+```
++ The average profit is 0.2366. Approx. 0.2489 of loans were not paid back.
+
+#### V) Sort the loans in HighInterest dataset by variable PredictedRisk. Create a new set called SelectedLoans that consists of the 100 loans with the smallest values of PredictedRisk. What is the profit? How many failed failed? How does this compare to the simple strategy (20.94)?
+
+```{r bestloans}
+riskpoint = sort(highinterest$PredictedRisk, decreasing = FALSE)[100]
+
+SelectedLoans = subset(highinterest, PredictedRisk <= riskpoint)
+
+sum(SelectedLoans$profit)
+
+selectloans = table(SelectedLoans$NotFullyPaid)
+selectloans
+```
++ Profit was 31.24. 19 of the loans failed.
+
+```{r stratcompare}
+
+31.24/20.94 * 100
+
+```
++ This is roughly 149% better than the simple strategy.
+
+#### D) One of the most important assumptions of predictive modeling often does not hold in financial situations, causing predictive models to fail. What do you think this is? As an analyst, what could you do to improve the situation?
++ I feel this does not account for human events, including market fluctuations. It may be better to have long-term data, especially data that is more up to date or indicative of the financial market.

@@ -1,0 +1,126 @@
+---
+title: "Logistic Regression Exercises"
+author: "Ethan Marcano"
+date: "2/25/2022"
+output:
+  pdf_document: default
+  html_document: default
+geometry: margin=0.5in 
+header-includes:
+  - \usepackage{setspace}
+  - \doublespacing
+  - \usepackage{caption}
+  - \captionsetup{width=.75\textwidth}
+  - \usepackage{geometry}
+  - \usepackage{listings}
+  - \usepackage{dcolumn}
+  - \lstset{breaklines=true}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(kableExtra)
+library(broom)
+library(caTools)
+library(stargazer)
+options(knitr.table.format = "latex")
+```
+
+## Exercise 1: Predicting the Baseball World Series Champion
+***
+
+### A) Exploring the dataset
+
+```{r baseballdata, echo=FALSE, warning=FALSE}
+  baseball <- read.csv("Baseball.csv")
+  dfbaseball <- as_tibble(baseball)
+```
+#### i) Each row of the dataset represent's a playoff's team's performance in a particular year. Through the years, different numbers of teams have been invited to the playoffs. How has the number of teams making it to the playoffs changed, according to this dataset?
+
+```{r cleanball, echo=FALSE, warning=FALSE, collapse=TRUE}
+head(baseball) %>%
+  kbl(booktabs = T, caption = "A brief look at the data", linesep = "\\addlinespace") %>%
+  kable_styling(latex_options = c("striped", "hold_position", "scale_down"))
+```
+
+```{r summary, echo=FALSE, include = FALSE}
+summary(baseball) %>%
+  kbl(booktabs = T, caption = "A look at the data's values") %>%
+  kable_styling(latex_options = c("striped", "hold_position", "scale_down")) %>%
+landscape()
+```
+
+```{r filtered, eval=FALSE, include=FALSE}
+filterball <- baseball %>%
+  select(Team, Year, RankSeason, NumCompetitors, WonWorldSeries) %>%
+  filter(WonWorldSeries == 1)
+
+filterball %>%
+  kbl(longtable = T, booktabs = T, caption = "World Series Champions and their rank in the Regular Season") %>%
+  kable_styling(full_width = T, latex_options = c("striped", "repeat_header"))
+```
+  + The number of competitors has increased from two teams at the beginning to 10 teams in the present day.
+  + Teams invited to the playoffs are somewhat lower in the regular season because of the the number of competitors invited.
+
+#### ii) Given that a team has made it to the playoffs, it is much harder to win the World Series if there are 10 teams competing for the championship versus just two. Therefore we have the variable **NumCompetitors** in our dataset. **NumCompetitors** contains the number of total teams making the playoffs in the year of the observation. For instance, **NumCompetitors** is 2 for the 1962 New York Yankees, but it is 8 for the 1998 Boston Red Sox. Without knowing anything else about the teams in the playoffs, can you think of a simple model that uses **NumCompetitors** to predict the probability of a team winning?
+  + A linear regression model using NumCompetitors shows that it is statistically significant in determining the probability of a team winning.
+
+```{r simplemodel, echo=FALSE}
+baseballtibble <- as_tibble(baseball)
+simplemodel <- lm(WonWorldSeries ~ NumCompetitors, data = baseballtibble)
+tidy(simplemodel) %>%
+  kbl(booktabs = T, caption = "Summary of Linear Regression") %>%
+  kable_styling(latex_options =c("striped"))
+```
+
+\newpage
+### B) Building a logistic regression model to predict the winner
+
+#### i) When we are not sure which of our variables are useful in predicting a particular outcome, it is often helpful to build bivariate models, which are models that predict the outcome using a single independent variable. Build a bivariate logistic regression model using each of the following variables as the independent variable to predict **WonWorldSeries** and the entire dataset as the training set each time: **Year, RS, RA, W, OBP, SLG, BA, RankSeason, NumCompetitors,** and **League**. You should have created 10 logistic regression models. Describe each of the models by giving the regression equation and the accuracy of the model. For which models is the independent variable significant? In your opinion, which are the best models and why?
+
+```{r bivariatelogit, echo=FALSE}
+logisticyear <- glm(WonWorldSeries ~ Year, family = binomial, data = dfbaseball)
+logisticRS <- glm(WonWorldSeries ~ RS, family = binomial, data = dfbaseball)
+logisticRA <- glm(WonWorldSeries ~ RA, family = binomial, data = dfbaseball)
+logisticW <- glm(WonWorldSeries ~ W, family = binomial, data = dfbaseball)
+logisticOBP <- glm(WonWorldSeries ~ OBP, family = binomial, data = dfbaseball)
+logisticSLG <- glm(WonWorldSeries ~ SLG, family = binomial, data = dfbaseball)
+logisticBA <- glm(WonWorldSeries ~ BA, family = binomial, data = dfbaseball)
+logisticrank <- glm(WonWorldSeries ~ RankSeason, family = binomial, data = dfbaseball)
+logisticcomp <- glm(WonWorldSeries ~ NumCompetitors, family = binomial, data = dfbaseball)
+logisticleague <- glm(WonWorldSeries ~ League, family = binomial, data = dfbaseball)
+```
+
+```{r logisticsum, include=FALSE}
+summary(logisticyear)
+summary(logisticRS)
+summary(logisticRA)
+summary(logisticW)
+summary(logisticOBP)
+summary(logisticSLG)
+summary(logisticBA)
+summary(logisticrank)
+summary(logisticcomp)
+summary(logisticleague)
+```
++ The year, number of competitors, RankSeason, and RA are all significant in their individual models.
+
+
+#### ii) Now, build a logistic model using all of the variables that you found to be significant in the bivariate models as the independent variables, and the entire dataset to train the model. Are all of the independent variables significant in this model? Why would some independent variables be significant in the bivariate model using that variable, but then not significant in a model that uses more than one independent variables? Be sure to provide numerical evidence for your claim. 
++ As none of the p-values are significant, none of the independent variables that were originally found to be significant are significant in the multivariate model. This may be due to colinearity.
+
+```{r multimodel, echo=FALSE, warning=FALSE, results='asis'}
+
+multimodel <- glm(WonWorldSeries ~ NumCompetitors + Year + RA + RankSeason, data = dfbaseball)
+
+stargazer(multimodel, title="Multivariate Model", header = FALSE, float = FALSE, table.placement = ", align = TRUE)
+```
+
+#### iii) Using any number of the independent variables that you found to be significant in the bivariate models, find what you think is the best model, and justify why you think it is the best. How many independent variables are used in your final model?
+```{r test, eval=FALSE, include=FALSE}
+bestmodel <-
+```
+
+#### iv) Do your findings in this problem confirm or reject the claim that the playoffs is more about luck than skill? Why?
+  + Yes, it confirms that the claim. The most significant variable, NumCompetitors, has no bearing on a team's skill.
